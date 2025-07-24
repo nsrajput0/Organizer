@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Friend's Chat - Real-time Messaging</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .chat-container {
+            max-height: 100vh;
+            overflow: hidden;
+        }
+
+        .messages-container {
+            height: calc(100vh - 140px);
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            animation: messageSlideIn 0.3s ease-out;
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .typing-indicator {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .online-indicator {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .sidebar {
+            transition: all 0.3s ease;
+        }
+
+        .emoji-picker {
+            display: none;
+            position: absolute;
+            bottom: 60px;
+            right: 10px;
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .emoji-picker.show {
+            display: block;
+        }
+
+        .emoji {
+            font-size: 24px;
+            cursor: pointer;
+            margin: 2px;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+
+        .emoji:hover {
+            transform: scale(1.3);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dark-mode {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .dark-mode .bg-white {
+            background: #2d2d2d !important;
+        }
+
+        .dark-mode .bg-gray-100 {
+            background: #3a3a3a !important;
+        }
+
+        .dark-mode .text-gray-800 {
+            color: #e5e5e5 !important;
+        }
+
+        .dark-mode .text-gray-600 {
+            color: #b0b0b0 !important;
+        }
+
+        .media-preview {
+            max-width: 300px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+
+        .group-admin-badge {
+            background: #fbbf24;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+
+        .message-reactions {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .reaction {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .voice-message {
+            background: #25d366;
+            color: white;
+            padding: 10px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            border: 2px solid white;
+        }
+
+        .status-online {
+            background: #10b981;
+        }
+
+        .status-away {
+            background: #f59e0b;
+        }
+
+        .status-offline {
+            background: #6b7280;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -100%;
+                z-index: 1000;
+                transition: left 0.3s ease;
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen"
+        class="fixed inset-0 bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center z-50">
+        <div class="text-center text-white">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+            <h2 class="text-2xl font-bold mb-2">App Name</h2>
+            <p class="text-lg">Connecting...</p>
+        </div>
+    </div>
+
+    <!-- Auth Screen -->
+    <div id="authScreen"
+        class="fixed inset-0 bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center z-40">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Friend's Chat</h1>
+                <p class="text-gray-600">Connect with friends instantly</p>
+            </div>
+
+            <div id="authTabs" class="flex bg-gray-100 rounded-lg p-1 mb-6">
+                <button id="loginTab"
+                    class="flex-1 py-2 px-4 rounded-md bg-blue-500 text-white font-medium transition-all">Login</button>
+                <button id="signupTab" class="flex-1 py-2 px-4 rounded-md text-gray-600 font-medium transition-all">Sign
+                    Up</button>
+            </div>
+
+            <form id="authForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                    <input type="text" id="username"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter your username" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" id="password"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter your password" required>
+                </div>
+                <div id="signupFields" class="space-y-4" style="display: none;">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                        <input type="text" id="displayName"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Your display name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                        <textarea id="bio"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Tell us about yourself..." rows="2"></textarea>
+                    </div>
+                </div>
+                <button type="submit"
+                    class="w-full bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors">
+                    <span id="authButtonText">Login</span>
+                </button>
+            </form>
+
+            <div id="authError" class="mt-4 text-red-500 text-sm text-center" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav id="mainNav"
+        class="fixed bottom-0 left-0 right-0 bg-white shadow-md flex justify-center items-center gap-4 py-3 border-b border-gray-200 z-30">
+        <button id="navChats"
+            class="nav-tab font-semibold text-blue-600 border-b-2 border-blue-600 px-4 py-1 focus:outline-none"><i
+                class="fas fa-comment-dots"></i></button>
+        <button id="navResources"
+            class="nav-tab font-semibold text-gray-600 hover:text-blue-600 px-4 py-1 focus:outline-none"><i
+                class="fas fa-toolbox"></i></button>
+        <button id="navNotifications"
+            class="nav-tab font-semibold text-gray-600 hover:text-blue-600 px-4 py-1 focus:outline-none">
+            <i class="fas fa-bell"></i>
+        </button>
+        <button id="navNote"
+            class="nav-tab font-semibold text-gray-600 hover:text-blue-600 px-4 py-1 focus:outline-none"><i
+                class="fas fa-note-sticky"></i></button>
+        <button id="navGoals"
+            class="nav-tab font-semibold text-gray-600 hover:text-blue-600 px-4 py-1 focus:outline-none"><i
+                class="fas fa-bullseye"></i></button>
+    </nav>
+
+    <div id="tabChats" style="display: none;">
+        <div id="mainApp" class="flex h-screen bg-gray-100" style="display: none;">
+            <!-- Sidebar -->
+            <div id="sidebar" class="sidebar w-110 bg-white shadow-lg flex flex-col">
+                <!-- Header -->
+                <div class="p-4 border-b border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h1 class="text-xl font-bold text-gray-800">App Name</h1>
+                        <div class="flex items-center gap-2">
+                            <button id="darkModeToggle" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                                <i class="fas fa-moon text-gray-600"></i>
+                            </button>
+                            <button id="logoutBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                                <i class="fas fa-sign-out-alt text-gray-600"></i>
+                            </button>
+                            <button id="settingsBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                                <i class="fas fa-cog text-gray-600"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- User Profile -->
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="relative">
+                            <img id="userAvatar" class="w-12 h-12 rounded-full object-cover"
+                                src="https://via.placeholder.com/48/667eea/ffffff?text=U" alt="User Avatar">
+                            <div class="status-indicator status-online"></div>
+                        </div>
+                        <div class="flex-1">
+                            <h3 id="userDisplayName" class="font-medium text-gray-800">User</h3>
+                            <p id="userBio" class="text-sm text-gray-600">Available</p>
+                        </div>
+                    </div>
+
+                    <!-- Search -->
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" id="searchInput"
+                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Search chats...">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="p-4 border-b border-gray-200">
+                    <div class="flex gap-2">
+                        <button id="newChatBtn"
+                            class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>New Chat
+                        </button>
+                        <button id="newGroupBtn"
+                            class="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+                            <i class="fas fa-users mr-2"></i>New Group
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chat List -->
+                <div class="flex-1 overflow-y-auto">
+                    <div id="chatList" class="p-2"></div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="flex-1 flex flex-col">
+                <!-- Chat Header -->
+                <div id="chatHeader" class="bg-white p-4 border-b border-gray-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <button id="toggleSidebar" class="md:hidden p-2 rounded-lg hover:bg-gray-100">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div class="relative">
+                            <img id="chatAvatar" class="w-10 h-10 rounded-full object-cover"
+                                src="https://via.placeholder.com/40/667eea/ffffff?text=C" alt="Chat Avatar">
+                            <div id="chatStatus" class="status-indicator status-offline"></div>
+                        </div>
+                        <div>
+                            <h3 id="chatName" class="font-medium text-gray-800">Select a chat</h3>
+                            <p id="chatInfo" class="text-sm text-gray-600">Welcome</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 relative">
+
+                        <!-- Dropdown menu, hidden by default -->
+                        <div id="chatMenuDropdown"
+                            class="absolute right-4 top-16 bg-white shadow-lg rounded-lg p-2 z-50 hidden">
+                            <button id="deleteChatBtn"
+                                class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 rounded">Delete
+                                Chat/Group</button>
+                        </div>
+                        <button id="chatMenuBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-ellipsis-v text-gray-600"></i>
+                        </button>
+                        <button id="manageMembersBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                            title="Manage Members">
+                            <i class="fas fa-user-plus text-green-600"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div id="messagesContainer" class="messages-container flex-1 p-4 space-y-4">
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-comments text-4xl mb-4"></i>
+                        <p>Select a chat to start messaging</p>
+                    </div>
+                </div>
+
+                <!-- Message Input -->
+                <div class="bg-white mb-12 p-4 border-t border-gray-200">
+                    <div class="flex items-center gap-2">
+                        <button id="attachBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-paperclip text-gray-600"></i>
+                        </button>
+                        <div class="flex-1 relative">
+                            <input type="text" id="messageInput" style="color: black;"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Type a message...">
+                            <button id="emojiBtn"
+                                class="absolute right-2 top-2 p-1 rounded hover:bg-gray-100 transition-colors">
+                                <i class="fas fa-smile text-gray-600"></i>
+                            </button>
+                        </div>
+                        <button id="voiceBtn" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                            <i class="fas fa-microphone text-gray-600"></i>
+                        </button>
+                        <button id="sendBtn"
+                            class="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Emoji Picker -->
+        <div id="emojiPicker" class="emoji-picker">
+            <div class="grid grid-cols-8 gap-1">
+                <span class="emoji">😀</span><span class="emoji">😂</span><span class="emoji">🥰</span><span
+                    class="emoji">😍</span>
+                <span class="emoji">😊</span><span class="emoji">😎</span><span class="emoji">🤗</span><span
+                    class="emoji">🤔</span>
+                <span class="emoji">😮</span><span class="emoji">😢</span><span class="emoji">😭</span><span
+                    class="emoji">😡</span>
+                <span class="emoji">👍</span><span class="emoji">👎</span><span class="emoji">👏</span><span
+                    class="emoji">🙏</span>
+                <span class="emoji">❤️</span><span class="emoji">💔</span><span class="emoji">💯</span><span
+                    class="emoji">🔥</span>
+                <span class="emoji">✨</span><span class="emoji">🎉</span><span class="emoji">🎊</span><span
+                    class="emoji">🌟</span>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <!-- New Chat Modal -->
+        <div id="newChatModal" class="modal">
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">New Chat</h3>
+                    <button class="close-modal p-2 hover:bg-gray-100 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <input type="text" id="newChatUsername" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Enter username">
+                    <button id="startChatBtn"
+                        class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">Start
+                        Chat</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Group Modal -->
+        <div id="newGroupModal" class="modal">
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">Create Group</h3>
+                    <button class="close-modal p-2 hover:bg-gray-100 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <input type="text" id="groupName" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Group name">
+                    <textarea id="groupDescription" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Group description" rows="2"></textarea>
+
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Add Members</label>
+                        <input type="text" id="groupUserSearch"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2"
+                            placeholder="Search users...">
+                        <div id="groupUserList" class="max-h-32 overflow-y-auto border rounded-lg p-2"></div>
+                    </div>
+                    <button id="createGroupBtn"
+                        class="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">Create
+                        Group</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal">
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">Settings</h3>
+                    <button class="close-modal p-2 hover:bg-gray-100 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                        <input type="text" id="settingsDisplayName"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Bio</label>
+                        <textarea id="settingsBio" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            rows="2"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Profile Picture</label>
+                        <input type="file" id="profilePicture" accept="image/*"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <button id="saveSettingsBtn"
+                        class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">Save
+                        Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Upload Input -->
+        <input type="file" id="fileInput" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            style="display: none;">
+        <div id="manageMembersModal" class="modal">
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">Manage Group Members</h3>
+                    <button class="close-modal p-2 hover:bg-gray-100 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div>
+                    <input type="text" id="addMemberSearch"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-2" placeholder="Search users...">
+                    <div id="addMemberList" class="max-h-40 overflow-y-auto border rounded-lg p-2"></div>
+                </div>
+                <button id="confirmAddMembersBtn"
+                    class="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors mt-4">Add
+                    Selected</button>
+                <h4 class="mt-6 mb-2 font-semibold text-gray-700">Current Members</h4>
+                <div id="currentMemberList" class="max-h-32 overflow-y-auto border rounded-lg p-2"></div>
+            </div>
+        </div>
+    </div>
+    <div id="tabResources" style="display: none;">
+        <div class="flex flex-col h-screen items-center bg-gray-100 p-8">
+            <button id="addResourceBtn"
+                class="mb-6 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Add Resource
+            </button>
+            <!-- Resource Form Modal -->
+            <div id="resourceFormModal" class="modal">
+                <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold" id="resourceFormTitle">Add Resource</h3>
+                        <button class="close-modal p-2 hover:bg-gray-100 rounded-lg" id="closeResourceForm">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <form id="resourceForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                            <input type="text" id="resourceTitle"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <!-- Replace this in your resource form -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Links</label>
+                            <div id="resourceLinksContainer"></div>
+                            <button type="button" id="addResourceLinkBtn"
+                                class="mt-2 bg-blue-100 text-blue-700 px-2 py-1 rounded">Add Link</button>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <textarea id="resourceDescription"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg" rows="2"></textarea>
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">Save</button>
+                    </form>
+                </div>
+            </div>
+            <div class="h-50 overflow-y-auto w-full max-w-2xl m-8 py-4">
+                <h2 class="text-2xl font-bold mb-4">Resources</h2>
+                <div id="resourcesList" class="space-y-4">
+                    <!-- Resources will be dynamically loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="tabNote" style="display: none;">
+        <div class="flex h-screen items-center justify-center bg-gray-100 text-gray-400 text-2xl">
+            Note (Coming soon)
+        </div>
+    </div>
+    <div id="tabGoals" style="display: none;">
+        <div class="flex flex-col h-screen items-center bg-gray-100 p-8">
+            <button id="addGoalBtn"
+                class="mb-6 px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Add Goal
+            </button>
+            <div class="h-50vh overflow-y-auto w-full max-w-2xl py-4">
+                <h2 class="text-2xl font-bold mb-4">Goals</h2>
+                <div id="goalsList" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+    <div id="goalFormModal" class="modal">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold" id="goalFormTitle">Add Goal</h3>
+                <button class="close-modal p-2 hover:bg-gray-100 rounded-lg" id="closeGoalForm">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="goalForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Goal</label>
+                    <input type="text" id="goalText" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Date</label>
+                    <input type="date" id="goalDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        required>
+                </div>
+                <button type="submit"
+                    class="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">Save</button>
+            </form>
+        </div>
+    </div>
+    <div id="tabNotifications" style="display: none;">
+    <div class="flex flex-col h-screen items-center bg-gray-100 p-8">
+        <h2 class="text-2xl font-bold mb-4">Notifications</h2>
+        <div id="notificationsList" class="space-y-4 w-full max-w-2xl"></div>
+    </div>
+</div>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA9keeVbcTBV7O8R3qC2O48lDiISiHWcNU",
+            authDomain: "chatapp-bca4b.firebaseapp.com",
+            databaseURL: "https://chatapp-bca4b-default-rtdb.firebaseio.com",
+            projectId: "chatapp-bca4b",
+            storageBucket: "chatapp-bca4b.firebasestorage.app",
+            messagingSenderId: "887437131133",
+            appId: "1:887437131133:web:8212964d4df022860ba014",
+            measurementId: "G-KXW1240YE7"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+        const storage = firebase.storage();
+
+        // Global variables
+        let currentUser = null;
+        let currentChat = null;
+        let isTyping = false;
+        let isDarkMode = false;
+        let messagesListener = null;
+
+        // DOM Elements
+
+        // ...existing code...
+        const elements = {
+            loadingScreen: document.getElementById('loadingScreen'),
+            authScreen: document.getElementById('authScreen'),
+            mainApp: document.getElementById('mainApp'),
+            authForm: document.getElementById('authForm'),
+            loginTab: document.getElementById('loginTab'),
+            signupTab: document.getElementById('signupTab'),
+            signupFields: document.getElementById('signupFields'),
+            authButtonText: document.getElementById('authButtonText'),
+            authError: document.getElementById('authError'),
+            sidebar: document.getElementById('sidebar'),
+            chatList: document.getElementById('chatList'),
+            messagesContainer: document.getElementById('messagesContainer'),
+            messageInput: document.getElementById('messageInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            emojiBtn: document.getElementById('emojiBtn'),
+            emojiPicker: document.getElementById('emojiPicker'),
+            attachBtn: document.getElementById('attachBtn'),
+            fileInput: document.getElementById('fileInput'),
+            voiceBtn: document.getElementById('voiceBtn'),
+            newChatBtn: document.getElementById('newChatBtn'),
+            newGroupBtn: document.getElementById('newGroupBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            darkModeToggle: document.getElementById('darkModeToggle'),
+            toggleSidebar: document.getElementById('toggleSidebar'),
+            userAvatar: document.getElementById('userAvatar'),
+            userDisplayName: document.getElementById('userDisplayName'),
+            userBio: document.getElementById('userBio'),
+            chatAvatar: document.getElementById('chatAvatar'),
+            chatName: document.getElementById('chatName'),
+            chatInfo: document.getElementById('chatInfo'),
+            chatStatus: document.getElementById('chatStatus'),
+            searchInput: document.getElementById('searchInput'),
+            chatMenuBtn: document.getElementById('chatMenuBtn') // <-- ADD THIS LINE
+        };
+        // ...existing code...
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', function () {
+            initializeApp();
+            setupEventListeners();
+        });
+
+        async function initializeApp() {
+            try {
+                // Show loading screen
+                elements.loadingScreen.style.display = 'flex';
+
+                // Check if user is already logged in
+                auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        currentUser = user;
+                        await loadUserData();
+                        showMainApp();
+                    } else {
+                        showAuthScreen();
+                    }
+                    elements.loadingScreen.style.display = 'none';
+                });
+
+                // Load dark mode preference
+                isDarkMode = localStorage.getItem('darkMode') === 'true';
+                if (isDarkMode) {
+                    document.body.classList.add('dark-mode');
+                    elements.darkModeToggle.innerHTML = '<i class="fas fa-sun text-yellow-500"></i>';
+                }
+
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                showError('Failed to initialize app. Please refresh the page.');
+            }
+        }
+
+        function setupEventListeners() {
+            // Auth tab switching
+            elements.loginTab.addEventListener('click', () => switchAuthTab('login'));
+            elements.signupTab.addEventListener('click', () => switchAuthTab('signup'));
+
+            // Auth form submission
+            elements.authForm.addEventListener('submit', handleAuthSubmit);
+
+            // Message input
+            elements.messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+                handleTyping();
+            });
+
+            // Send button
+            elements.sendBtn.addEventListener('click', sendMessage);
+
+            // Emoji picker
+            elements.emojiBtn.addEventListener('click', toggleEmojiPicker);
+            document.querySelectorAll('.emoji').forEach(emoji => {
+                emoji.addEventListener('click', (e) => {
+                    elements.messageInput.value += e.target.textContent;
+                    elements.emojiPicker.classList.remove('show');
+                });
+            });
+
+            // File attachment
+            elements.attachBtn.addEventListener('click', () => elements.fileInput.click());
+            elements.fileInput.addEventListener('change', handleFileUpload);
+
+            // Voice message
+            elements.voiceBtn.addEventListener('click', handleVoiceMessage);
+
+            // Modal controls
+            elements.newChatBtn.addEventListener('click', () => showModal('newChatModal'));
+            elements.newGroupBtn.addEventListener('click', () => showModal('newGroupModal'));
+            elements.settingsBtn.addEventListener('click', () => showModal('settingsModal'));
+
+            // Close modals
+            document.querySelectorAll('.close-modal').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.target.closest('.modal').classList.remove('show');
+                });
+            });
+
+            // Modal actions
+            document.getElementById('startChatBtn').addEventListener('click', startNewChat);
+            document.getElementById('createGroupBtn').addEventListener('click', createGroup);
+            document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+            // Other controls
+            elements.logoutBtn.addEventListener('click', logout);
+            elements.darkModeToggle.addEventListener('click', toggleDarkMode);
+            elements.toggleSidebar.addEventListener('click', toggleSidebar);
+            elements.searchInput.addEventListener('input', searchChats);
+
+            // Close emoji picker when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#emojiBtn') && !e.target.closest('#emojiPicker')) {
+                    elements.emojiPicker.classList.remove('show');
+                }
+            });
+        }
+
+        function switchAuthTab(tab) {
+            if (tab === 'login') {
+                elements.loginTab.classList.add('bg-blue-500', 'text-white');
+                elements.loginTab.classList.remove('text-gray-600');
+                elements.signupTab.classList.remove('bg-blue-500', 'text-white');
+                elements.signupTab.classList.add('text-gray-600');
+                elements.signupFields.style.display = 'none';
+                elements.authButtonText.textContent = 'Login';
+            } else {
+                elements.signupTab.classList.add('bg-blue-500', 'text-white');
+                elements.signupTab.classList.remove('text-gray-600');
+                elements.loginTab.classList.remove('bg-blue-500', 'text-white');
+                elements.loginTab.classList.add('text-gray-600');
+                elements.signupFields.style.display = 'block';
+                elements.authButtonText.textContent = 'Sign Up';
+            }
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            hideError();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const isSignup = elements.signupFields.style.display !== 'none';
+
+            if (!username || !password) {
+                showError('Please fill in all required fields');
+                return;
+            }
+
+            try {
+                if (isSignup) {
+                    await signupUser(username, password);
+                } else {
+                    await loginUser(username, password);
+                }
+            } catch (error) {
+                console.error('Auth error:', error);
+                showError(error.message || 'Authentication failed');
+            }
+        }
+
+        async function signupUser(username, password) {
+            // Check if username already exists
+            const usersRef = database.ref('users');
+            const snapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+
+            if (snapshot.exists()) {
+                throw new Error('Username already exists');
+            }
+
+            // Create user with email format for Firebase Auth
+            const email = `${username}@friendschat.app`;
+            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            // Save user data
+            const displayName = document.getElementById('displayName').value.trim() || username;
+            const bio = document.getElementById('bio').value.trim() || 'Available';
+
+            await database.ref(`users/${user.uid}`).set({
+                username: username,
+                displayName: displayName,
+                bio: bio,
+                createdAt: Date.now(),
+                lastSeen: Date.now(),
+                status: 'online',
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=667eea&color=fff&size=200`
+            });
+
+            currentUser = user;
+            await loadUserData();
+            showMainApp();
+        }
+
+        async function loginUser(username, password) {
+            // Find user by username
+            const usersRef = database.ref('users');
+            const snapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+
+            if (!snapshot.exists()) {
+                throw new Error('User not found');
+            }
+
+            // Get user data
+            const userData = Object.values(snapshot.val())[0];
+            const email = `${username}@friendschat.app`;
+
+            // Sign in with email and password
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            currentUser = userCredential.user;
+
+            // Update online status
+            await database.ref(`users/${currentUser.uid}`).update({
+                lastSeen: Date.now(),
+                status: 'online'
+            });
+
+            await loadUserData();
+            showMainApp();
+        }
+
+        async function loadUserData() {
+            if (!currentUser) return;
+
+            const snapshot = await database.ref(`users/${currentUser.uid}`).once('value');
+            const userData = snapshot.val();
+
+            if (userData) {
+                elements.userDisplayName.textContent = userData.displayName || userData.username;
+                elements.userBio.textContent = userData.bio || 'Available';
+                elements.userAvatar.src = userData.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.displayName || userData.username)}&background=667eea&color=fff&size=200`;
+            }
+        }
+
+        function showAuthScreen() {
+            elements.loadingScreen.style.display = 'none';
+            elements.authScreen.style.display = 'flex';
+            elements.mainApp.style.display = 'none';
+        }
+
+        function showMainApp() {
+            elements.loadingScreen.style.display = 'none';
+            elements.authScreen.style.display = 'none';
+            elements.mainApp.style.display = 'flex';
+            loadChats();
+        }
+
+        async function loadChats() {
+            if (!currentUser) return;
+
+            const chatsRef = database.ref('chats');
+            chatsRef.on('value', (snapshot) => {
+                const chats = snapshot.val() || {};
+                const chatList = elements.chatList;
+                chatList.innerHTML = '';
+
+                Object.entries(chats).forEach(([chatId, chat]) => {
+                    // Check if user is member of this chat
+                    if (chat.members && chat.members[currentUser.uid]) {
+                        const chatItem = createChatItem(chatId, chat);
+                        chatList.appendChild(chatItem);
+                    }
+                });
+            });
+        }
+
+        function createChatItem(chatId, chat) {
+            const chatItem = document.createElement('div');
+            chatItem.className = 'chat-item p-3 hover:bg-gray-100 cursor-pointer rounded-lg transition-colors';
+            chatItem.dataset.chatId = chatId;
+
+            const isGroup = chat.type === 'group';
+            const chatName = isGroup ? chat.name : getPrivateChatName(chat);
+            const avatar = isGroup ? (chat.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=10b981&color=fff&size=200`) :
+                (chat.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatName)}&background=667eea&color=fff&size=200`);
+
+            chatItem.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <img class="w-12 h-12 rounded-full object-cover" src="${avatar}" alt="${chatName}">
+                        <div class="status-indicator status-online"></div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-medium text-gray-800 truncate">${chatName}</h4>
+                            <span class="text-xs text-gray-500">${formatTime(chat.lastMessage?.timestamp || Date.now())}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 truncate">${chat.lastMessage?.text || 'No messages yet'}</p>
+                    </div>
+                </div>
+            `;
+
+            chatItem.addEventListener('click', () => openChat(chatId, chat));
+            return chatItem;
+        }
+
+        function getPrivateChatName(chat) {
+            if (!chat.members) return 'Unknown';
+
+            const memberIds = Object.keys(chat.members);
+            const otherUserId = memberIds.find(id => id !== currentUser.uid);
+
+            return chat.members[otherUserId]?.displayName || 'Unknown User';
+        }
+
+        function openChat(chatId, chat) {
+            currentChat = { id: chatId, ...chat };
+
+            // Update chat header
+            const isGroup = chat.type === 'group';
+            const chatName = isGroup ? chat.name : getPrivateChatName(chat);
+            const avatar = isGroup ? (chat.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.name)}&background=10b981&color=fff&size=200`) :
+                (chat.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatName)}&background=667eea&color=fff&size=200`);
+
+            elements.chatName.textContent = chatName;
+            elements.chatAvatar.src = avatar;
+            elements.chatInfo.textContent = isGroup ? `${Object.keys(chat.members || {}).length} members` : 'Last seen recently';
+
+            // Load messages
+            loadMessages(chatId);
+
+            // Hide sidebar on mobile
+            if (window.innerWidth <= 768) {
+                elements.sidebar.classList.remove('show');
+            }
+        }
+
+        function loadMessages(chatId) {
+            // Remove previous listener
+            if (messagesListener) {
+                messagesListener.off();
+            }
+
+            const messagesRef = database.ref(`messages/${chatId}`);
+            messagesListener = messagesRef.orderByChild('timestamp');
+
+            messagesListener.on('value', (snapshot) => {
+                const messages = snapshot.val() || {};
+                const container = elements.messagesContainer;
+                container.innerHTML = '';
+
+                Object.entries(messages).forEach(([messageId, message]) => {
+                    const messageElement = createMessageElement(messageId, message);
+                    container.appendChild(messageElement);
+                });
+
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+
+        function createMessageElement(messageId, message) {
+            const messageDiv = document.createElement('div');
+            const isOwn = message.senderId === currentUser.uid;
+
+            messageDiv.className = `message flex ${isOwn ? 'justify-end' : 'justify-start'}`;
+            messageDiv.dataset.messageId = messageId;
+
+            const messageContent = document.createElement('div');
+            messageContent.className = `max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${isOwn ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800'
+                }`;
+
+            let contentHTML = '';
+
+            // Handle different message types
+            if (message.type === 'text') {
+                contentHTML = `<p>${escapeHtml(message.text)}</p>`;
+            } else if (message.type === 'image') {
+                contentHTML = `
+                    <img src="${message.url}" alt="Image" class="media-preview rounded mb-2">
+                    ${message.text ? `<p>${escapeHtml(message.text)}</p>` : ''}
+                `;
+            } else if (message.type === 'video') {
+                contentHTML = `
+                    <video controls playsinline webkit-playsinline class="media-preview rounded mb-2">
+                        <source src="${message.url}" type="video/mp4">
+                    </video>
+                    ${message.text ? `<p>${escapeHtml(message.text)}</p>` : ''}
+                `;
+            } else if (message.type === 'voice') {
+                contentHTML = `
+                    <div class="voice-message">
+                        <i class="fas fa-play mr-2"></i>
+                        <span>Voice message</span>
+                        <audio controls class="ml-2">
+                            <source src="${message.url}" type="audio/mpeg">
+                        </audio>
+                    </div>
+                `;
+            } else if (message.type === 'file') {
+                contentHTML = `
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-file text-gray-500"></i>
+                        <a href="${message.url}" download="${message.fileName}" class="text-blue-500 hover:underline">
+                            ${escapeHtml(message.fileName)}
+                        </a>
+                    </div>
+                `;
+            }
+
+            // Add timestamp and sender info
+            const timeStr = formatTime(message.timestamp);
+            const senderName = !isOwn && currentChat.type === 'group' ? message.senderName : '';
+
+            contentHTML += `
+                <div class="flex items-center justify-between mt-2 text-xs opacity-75">
+                    <span>${senderName}</span>
+                    <span>${timeStr}</span>
+                </div>
+            `;
+
+            messageContent.innerHTML = contentHTML;
+            messageDiv.appendChild(messageContent);
+
+            return messageDiv;
+        }
+
+        async function sendMessage() {
+            if (!currentChat || !currentUser) return;
+
+            const text = elements.messageInput.value.trim();
+            if (!text) return;
+
+            const message = {
+                senderId: currentUser.uid,
+                senderName: elements.userDisplayName.textContent,
+                text: text,
+                type: 'text',
+                timestamp: Date.now()
+            };
+
+            try {
+                // Add message to database
+                await database.ref(`messages/${currentChat.id}`).push(message);
+
+                // Update last message in chat
+                await database.ref(`chats/${currentChat.id}`).update({
+                    lastMessage: {
+                        text: text,
+                        timestamp: Date.now(),
+                        senderId: currentUser.uid
+                    }
+                });
+
+                // Clear input
+                elements.messageInput.value = '';
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showError('Failed to send message');
+            }
+        }
+
+        async function handleFileUpload(e) {
+            const files = Array.from(e.target.files);
+            if (!files.length || !currentChat) return;
+
+            for (const file of files) {
+                await uploadFile(file);
+            }
+
+            // Clear file input
+            e.target.value = '';
+        }
+
+        async function uploadFile(file) {
+            const fileRef = storage.ref(`files/${currentChat.id}/${Date.now()}_${file.name}`);
+
+            try {
+                const snapshot = await fileRef.put(file);
+                const downloadURL = await snapshot.ref.getDownloadURL();
+
+                let messageType = 'file';
+                if (file.type.startsWith('image/')) {
+                    messageType = 'image';
+                } else if (file.type.startsWith('video/')) {
+                    messageType = 'video';
+                } else if (file.type.startsWith('audio/')) {
+                    messageType = 'voice';
+                }
+
+                const message = {
+                    senderId: currentUser.uid,
+                    senderName: elements.userDisplayName.textContent,
+                    type: messageType,
+                    url: downloadURL,
+                    fileName: file.name,
+                    timestamp: Date.now()
+                };
+
+                await database.ref(`messages/${currentChat.id}`).push(message);
+
+                await database.ref(`chats/${currentChat.id}`).update({
+                    lastMessage: {
+                        text: messageType === 'image' ? '📷 Image' :
+                            messageType === 'video' ? '🎥 Video' :
+                                messageType === 'voice' ? '🎤 Voice message' :
+                                    `📎 ${file.name}`,
+                        timestamp: Date.now(),
+                        senderId: currentUser.uid
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                showError('Failed to upload file');
+            }
+        }
+
+        async function handleVoiceMessage() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError('Voice messages are not supported in this browser');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
+                    const file = new File([audioBlob], `voice_${Date.now()}.mp3`, { type: 'audio/mpeg' });
+                    await uploadFile(file);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                // Start recording
+                mediaRecorder.start();
+                elements.voiceBtn.innerHTML = '<i class="fas fa-stop text-red-500"></i>';
+                elements.voiceBtn.onclick = () => {
+                    mediaRecorder.stop();
+                    elements.voiceBtn.innerHTML = '<i class="fas fa-microphone text-gray-600"></i>';
+                    elements.voiceBtn.onclick = handleVoiceMessage;
+                };
+
+            } catch (error) {
+                console.error('Error with voice message:', error);
+                showError('Failed to record voice message');
+            }
+        }
+
+        async function startNewChat() {
+            const username = document.getElementById('newChatUsername').value.trim();
+            if (!username) return;
+
+            try {
+                // Find user by username
+                const usersRef = database.ref('users');
+                const snapshot = await usersRef.orderByChild('username').equalTo(username).once('value');
+
+                if (!snapshot.exists()) {
+                    showError('User not found');
+                    return;
+                }
+
+                const userData = Object.entries(snapshot.val())[0];
+                const [otherUserId, otherUser] = userData;
+
+                if (otherUserId === currentUser.uid) {
+                    showError('You cannot chat with yourself');
+                    return;
+                }
+
+                // Check if chat already exists
+                const chatsRef = database.ref('chats');
+                const chatsSnapshot = await chatsRef.orderByChild('type').equalTo('private').once('value');
+                const existingChats = chatsSnapshot.val() || {};
+
+                const existingChatId = Object.keys(existingChats).find(chatId => {
+                    const chat = existingChats[chatId];
+                    return chat.members && chat.members[currentUser.uid] && chat.members[otherUserId];
+                });
+
+                if (existingChatId) {
+                    openChat(existingChatId, existingChats[existingChatId]);
+                    document.getElementById('newChatModal').classList.remove('show');
+                    return;
+                }
+
+                // Create new chat
+                const newChatRef = chatsRef.push();
+                const chatData = {
+                    type: 'private',
+                    createdAt: Date.now(),
+                    members: {
+                        [currentUser.uid]: {
+                            displayName: elements.userDisplayName.textContent,
+                            joinedAt: Date.now()
+                        },
+                        [otherUserId]: {
+                            displayName: otherUser.displayName,
+                            joinedAt: Date.now()
+                        }
+                    }
+                };
+
+                await newChatRef.set(chatData);
+
+                // Open the new chat
+                openChat(newChatRef.key, chatData);
+                document.getElementById('newChatModal').classList.remove('show');
+                document.getElementById('newChatUsername').value = '';
+
+            } catch (error) {
+                console.error('Error starting new chat:', error);
+                showError('Failed to start new chat');
+            }
+        }
+
+        async function createGroup() {
+            const groupName = document.getElementById('groupName').value.trim();
+            const groupDescription = document.getElementById('groupDescription').value.trim();
+
+            if (!groupName) {
+                showError('Please enter a group name');
+                return;
+            }
+
+            try {
+                const groupData = {
+                    type: 'group',
+                    name: groupName,
+                    description: groupDescription,
+                    createdAt: Date.now(),
+                    createdBy: currentUser.uid,
+                    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(groupName)}&background=10b981&color=fff&size=200`,
+                    members: {
+                        [currentUser.uid]: {
+                            displayName: elements.userDisplayName.textContent,
+                            role: 'admin',
+                            joinedAt: Date.now()
+                        }
+                    }
+                };
+
+                const newGroupRef = database.ref('chats').push();
+                await newGroupRef.set(groupData);
+
+                // Open the new group
+                openChat(newGroupRef.key, groupData);
+                document.getElementById('newGroupModal').classList.remove('show');
+                document.getElementById('groupName').value = '';
+                document.getElementById('groupDescription').value = '';
+
+            } catch (error) {
+                console.error('Error creating group:', error);
+                showError('Failed to create group');
+            }
+        }
+
+        async function saveSettings() {
+            const displayName = document.getElementById('settingsDisplayName').value.trim();
+            const bio = document.getElementById('settingsBio').value.trim();
+            const profilePicture = document.getElementById('profilePicture').files[0];
+
+            if (!displayName) {
+                showError('Display name is required');
+                return;
+            }
+
+            try {
+                const updates = {
+                    displayName: displayName,
+                    bio: bio || 'Available'
+                };
+
+                if (profilePicture) {
+                    const fileRef = storage.ref(`avatars/${currentUser.uid}`);
+                    const snapshot = await fileRef.put(profilePicture);
+                    const downloadURL = await snapshot.ref.getDownloadURL();
+                    updates.avatar = downloadURL;
+                }
+
+                await database.ref(`users/${currentUser.uid}`).update(updates);
+                await loadUserData();
+
+                document.getElementById('settingsModal').classList.remove('show');
+                showSuccess('Settings saved successfully');
+
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showError('Failed to save settings');
+            }
+        }
+
+        function toggleEmojiPicker() {
+            elements.emojiPicker.classList.toggle('show');
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode', isDarkMode);
+            localStorage.setItem('darkMode', isDarkMode);
+
+            elements.darkModeToggle.innerHTML = isDarkMode ?
+                '<i class="fas fa-sun text-yellow-500"></i>' :
+                '<i class="fas fa-moon text-gray-600"></i>';
+        }
+
+        function toggleSidebar() {
+            elements.sidebar.classList.toggle('show');
+        }
+
+        function searchChats() {
+            const searchTerm = elements.searchInput.value.toLowerCase();
+            const chatItems = document.querySelectorAll('.chat-item');
+
+            chatItems.forEach(item => {
+                const chatName = item.querySelector('h4').textContent.toLowerCase();
+                const lastMessage = item.querySelector('p').textContent.toLowerCase();
+
+                if (chatName.includes(searchTerm) || lastMessage.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function handleTyping() {
+            // Implement typing indicator logic here
+            // This would involve sending typing status to Firebase
+        }
+
+        async function logout() {
+            try {
+                if (currentUser) {
+                    await database.ref(`users/${currentUser.uid}`).update({
+                        status: 'offline',
+                        lastSeen: Date.now()
+                    });
+                }
+
+                await auth.signOut();
+                currentUser = null;
+                currentChat = null;
+
+                if (messagesListener) {
+                    messagesListener.off();
+                }
+
+                showAuthScreen();
+            } catch (error) {
+                console.error('Error logging out:', error);
+                showError('Failed to log out');
+            }
+        }
+
+        // Utility functions
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+
+        function showError(message) {
+            elements.authError.textContent = message;
+            elements.authError.style.display = 'block';
+            setTimeout(() => {
+                elements.authError.style.display = 'none';
+            }, 5000);
+        }
+
+        function hideError() {
+            elements.authError.style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            // Create a temporary success message element
+            const successDiv = document.createElement('div');
+            successDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg z-50';
+            successDiv.textContent = message;
+            document.body.appendChild(successDiv);
+
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+
+            if (diff < 60000) return 'now';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+            if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
+
+            return date.toLocaleDateString();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                elements.sidebar.classList.remove('show');
+            }
+        });
+        // ...existing code...
+
+        let selectedGroupMembers = {};
+
+        document.getElementById('groupUserSearch').addEventListener('input', async function () {
+            const search = this.value.trim().toLowerCase();
+            const usersRef = database.ref('users');
+            const snapshot = await usersRef.once('value');
+            const users = snapshot.val() || {};
+            const list = document.getElementById('groupUserList');
+            list.innerHTML = '';
+
+            Object.entries(users).forEach(([uid, user]) => {
+                if (uid === currentUser.uid) return; // skip self
+                if (user.username.toLowerCase().includes(search) || user.displayName.toLowerCase().includes(search)) {
+                    const item = document.createElement('div');
+                    item.className = 'flex items-center gap-2 mb-1';
+                    item.innerHTML = `
+                <input type="checkbox" data-uid="${uid}" ${selectedGroupMembers[uid] ? 'checked' : ''}>
+                <span>${user.displayName} (@${user.username})</span>
+            `;
+                    item.querySelector('input').addEventListener('change', function () {
+                        if (this.checked) {
+                            selectedGroupMembers[uid] = user.displayName;
+                        } else {
+                            delete selectedGroupMembers[uid];
+                        }
+                    });
+                    list.appendChild(item);
+                }
+            });
+        });
+
+        // ...existing code...
+
+        async function createGroup() {
+            const groupName = document.getElementById('groupName').value.trim();
+            const groupDescription = document.getElementById('groupDescription').value.trim();
+
+            if (!groupName) {
+                showError('Please enter a group name');
+                return;
+            }
+
+            try {
+                const members = {
+                    [currentUser.uid]: {
+                        displayName: elements.userDisplayName.textContent,
+                        role: 'admin',
+                        joinedAt: Date.now()
+                    }
+                };
+                // Add selected members
+                Object.entries(selectedGroupMembers).forEach(([uid, displayName]) => {
+                    members[uid] = {
+                        displayName,
+                        role: 'member',
+                        joinedAt: Date.now()
+                    };
+                });
+
+                const groupData = {
+                    type: 'group',
+                    name: groupName,
+                    description: groupDescription,
+                    createdAt: Date.now(),
+                    createdBy: currentUser.uid,
+                    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(groupName)}&background=10b981&color=fff&size=200`,
+                    members
+                };
+
+                const newGroupRef = database.ref('chats').push();
+                await newGroupRef.set(groupData);
+
+                // Open the new group
+                openChat(newGroupRef.key, groupData);
+                document.getElementById('newGroupModal').classList.remove('show');
+                document.getElementById('groupName').value = '';
+                document.getElementById('groupDescription').value = '';
+                selectedGroupMembers = {};
+                document.getElementById('groupUserList').innerHTML = '';
+                document.getElementById('groupUserSearch').value = '';
+
+            } catch (error) {
+                console.error('Error creating group:', error);
+                showError('Failed to create group');
+            }
+        }
+        elements.chatMenuBtn.addEventListener('click', () => {
+            const dropdown = document.getElementById('chatMenuDropdown');
+            dropdown.classList.toggle('hidden');
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#chatMenuBtn') && !e.target.closest('#chatMenuDropdown')) {
+                document.getElementById('chatMenuDropdown').classList.add('hidden');
+            }
+        });
+
+        // Delete chat/group when delete button is clicked
+        document.getElementById('deleteChatBtn').addEventListener('click', async () => {
+            if (!currentChat || !currentChat.id) {
+                showError('No chat selected or chat ID missing');
+                return;
+            }
+            if (!confirm('Are you sure you want to delete this chat/group? This cannot be undone.')) return;
+
+            try {
+                console.log('Deleting chat:', currentChat.id);
+                await database.ref(`chats/${currentChat.id}`).remove();
+                await database.ref(`messages/${currentChat.id}`).remove();
+
+                elements.messagesContainer.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <i class="fas fa-comments text-4xl mb-4"></i>
+                <p>Select a chat to start messaging</p>
+            </div>
+        `;
+                elements.chatName.textContent = 'Select a chat';
+                elements.chatAvatar.src = 'https://via.placeholder.com/40/667eea/ffffff?text=C';
+                elements.chatInfo.textContent = 'Welcome to Friend\'s Chat';
+                currentChat = null;
+                showSuccess('Chat/Group deleted!');
+                document.getElementById('chatMenuDropdown').classList.add('hidden');
+                loadChats();
+            } catch (error) {
+                console.error('Error deleting chat/group:', error);
+                showError('Failed to delete chat/group');
+            }
+        });
+        let addMembersSelected = {};
+
+        elements.manageMembersBtn = document.getElementById('manageMembersBtn');
+        elements.confirmAddMembersBtn = document.getElementById('confirmAddMembersBtn');
+        elements.addMemberSearch = document.getElementById('addMemberSearch');
+        elements.addMemberList = document.getElementById('addMemberList');
+        elements.currentMemberList = document.getElementById('currentMemberList');
+
+        // Show modal only for group chats
+        elements.manageMembersBtn.addEventListener('click', () => {
+            if (!currentChat || currentChat.type !== 'group') return;
+            document.getElementById('manageMembersModal').classList.add('show');
+            renderCurrentMembers();
+            elements.addMemberSearch.value = '';
+            elements.addMemberList.innerHTML = '';
+            addMembersSelected = {};
+        });
+
+        // Search and display users to add
+        elements.addMemberSearch.addEventListener('input', async function () {
+            const search = this.value.trim().toLowerCase();
+            const usersRef = database.ref('users');
+            const snapshot = await usersRef.once('value');
+            const users = snapshot.val() || {};
+            elements.addMemberList.innerHTML = '';
+
+            Object.entries(users).forEach(([uid, user]) => {
+                // Don't show users already in group
+                if (currentChat.members && currentChat.members[uid]) return;
+                if (uid === currentUser.uid) return;
+                if (user.username.toLowerCase().includes(search) || user.displayName.toLowerCase().includes(search)) {
+                    const item = document.createElement('div');
+                    item.className = 'flex items-center gap-2 mb-1';
+                    item.innerHTML = `
+                <input type="checkbox" data-uid="${uid}" ${addMembersSelected[uid] ? 'checked' : ''}>
+                <span>${user.displayName} (@${user.username})</span>
+            `;
+                    item.querySelector('input').addEventListener('change', function () {
+                        if (this.checked) {
+                            addMembersSelected[uid] = user.displayName;
+                        } else {
+                            delete addMembersSelected[uid];
+                        }
+                    });
+                    elements.addMemberList.appendChild(item);
+                }
+            });
+        });
+
+        // Add selected users to group
+        elements.confirmAddMembersBtn.addEventListener('click', async function () {
+            if (!currentChat || !currentChat.id) return;
+            const updates = {};
+            Object.entries(addMembersSelected).forEach(([uid, displayName]) => {
+                updates[`members/${uid}`] = {
+                    displayName,
+                    role: 'member',
+                    joinedAt: Date.now()
+                };
+            });
+            await database.ref(`chats/${currentChat.id}`).update(updates);
+            showSuccess('Members added!');
+            document.getElementById('manageMembersModal').classList.remove('show');
+            addMembersSelected = {};
+            elements.addMemberList.innerHTML = '';
+            elements.addMemberSearch.value = '';
+            renderCurrentMembers();
+            loadChats();
+        });
+
+        // Render current members with remove option
+        async function renderCurrentMembers() {
+            if (!currentChat || !currentChat.id) return;
+            // Fetch latest members from database
+            const snapshot = await database.ref(`chats/${currentChat.id}/members`).once('value');
+            const members = snapshot.val() || {};
+            currentChat.members = members;
+
+            elements.currentMemberList.innerHTML = '';
+            Object.entries(members).forEach(([uid, member]) => {
+                if (uid === currentUser.uid) return; // Don't allow removing self/admin
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between mb-1';
+                item.innerHTML = `
+            <span>${member.displayName}</span>
+            <button class="remove-member-btn text-red-500 px-2 py-1 rounded hover:bg-red-100" data-uid="${uid}">Remove</button>
+        `;
+                item.querySelector('.remove-member-btn').addEventListener('click', async function () {
+                    if (!confirm(`Remove ${member.displayName} from group?`)) return;
+                    await database.ref(`chats/${currentChat.id}/members/${uid}`).remove();
+                    showSuccess('Member removed!');
+                    await renderCurrentMembers();
+                    loadChats();
+                });
+                elements.currentMemberList.appendChild(item);
+            });
+        }
+
+        // Tab navigation logic
+        const navTabs = [
+            { btn: 'navChats', tab: 'tabChats' },
+            { btn: 'navResources', tab: 'tabResources' },
+            { btn: 'navNote', tab: 'tabNote' },
+            { btn: 'navGoals', tab: 'tabGoals' },
+            { btn: 'navNotifications', tab: 'tabNotifications' }
+        ];
+
+        function showTab(tabId) {
+            navTabs.forEach(({ btn, tab }) => {
+                document.getElementById(tab).style.display = (tab === tabId) ? 'block' : 'none';
+                document.getElementById(btn).classList.toggle('text-blue-600', tab === tabId);
+                document.getElementById(btn).classList.toggle('border-blue-600', tab === tabId);
+                document.getElementById(btn).classList.toggle('border-b-2', tab === tabId);
+                document.getElementById(btn).classList.toggle('text-gray-600', tab !== tabId);
+            });
+        }
+
+        // Show Chats tab by default after auth
+        function showMainApp() {
+            elements.loadingScreen.style.display = 'none';
+            elements.authScreen.style.display = 'none';
+            showTab('tabResources');
+            document.getElementById('mainApp').style.display = 'flex';
+            loadChats();
+            loadResources(); // <-- Ensure resources load after login
+        }
+
+        // Navigation tab click events
+        navTabs.forEach(({ btn, tab }) => {
+            document.getElementById(btn).addEventListener('click', () => {
+                showTab(tab);
+                if (tab === 'tabChats') {
+                    document.getElementById('mainApp').style.display = 'flex';
+                } else {
+                    document.getElementById('mainApp').style.display = 'none';
+                }
+                if (tab === 'tabResources') {
+                    loadResources(); // <-- Load resources when switching tab
+                }
+                if (tab === 'tabNote') {
+                    loadNotes();
+                }
+                if (tab === 'tabGoals') {
+            loadGoals();
+        }
+        if (tab === 'tabNotifications') {
+            loadNotifications(); // <-- Add this line
+        }
+            });
+        });
+        // Resource management for Resources tab
+        const resourcesList = document.getElementById('resourcesList');
+        const resourceFormModal = document.getElementById('resourceFormModal');
+        const resourceForm = document.getElementById('resourceForm');
+        const addResourceBtn = document.getElementById('addResourceBtn');
+        const closeResourceForm = document.getElementById('closeResourceForm');
+        const resourceFormTitle = document.getElementById('resourceFormTitle');
+
+        let editingResourceId = null;
+
+        // Show modal to add resource
+        addResourceBtn.addEventListener('click', () => {
+            resourceFormTitle.textContent = 'Add Resource';
+            resourceForm.reset();
+            editingResourceId = null;
+            resourceLinksContainer.innerHTML = '';
+            addLinkInput();
+            resourceFormModal.classList.add('show');
+        });
+
+        // Close modal
+        closeResourceForm.addEventListener('click', () => {
+            resourceFormModal.classList.remove('show');
+        });
+
+        // Multiple Resource Links Setup
+        const resourceLinksContainer = document.getElementById('resourceLinksContainer');
+        const addResourceLinkBtn = document.getElementById('addResourceLinkBtn');
+
+        function addLinkInput(link = { title: '', url: '' }) {
+    const div = document.createElement('div');
+    div.className = 'flex flex-col gap-2 mb-2 text-black';
+    div.innerHTML = `
+        <input type="text" class="resource-link-title flex-1 px-2 py-1 border rounded" placeholder="Link Title" value="${link.title ? escapeHtml(link.title) : ''}" required>
+        <div>
+        <input type="url" class="resource-link-url flex-1 px-2 py-1 border rounded" placeholder="https://..." value="${link.url ? escapeHtml(link.url) : ''}" required>
+        <button type="button" class="remove-link-btn text-red-500 px-2">✕</button>
+        </div>
+    `;
+    div.querySelector('.remove-link-btn').onclick = () => div.remove();
+    resourceLinksContainer.appendChild(div);
+}
+
+        addResourceLinkBtn.onclick = () => addLinkInput();
+
+        // Save resource (add or edit)
+        resourceForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    const title = document.getElementById('resourceTitle').value.trim();
+    const description = document.getElementById('resourceDescription').value.trim();
+    const links = Array.from(resourceLinksContainer.querySelectorAll('div')).map(div => {
+        const titleInput = div.querySelector('.resource-link-title');
+        const urlInput = div.querySelector('.resource-link-url');
+        return {
+            title: titleInput.value.trim(),
+            url: urlInput.value.trim()
+        };
+    }).filter(link => link.title && link.url);
+
+    if (!title || links.length === 0) return;
+
+    const resourceData = {
+        title,
+        links, // array of {title, url}
+        description,
+        createdAt: Date.now()
+    };
+
+    try {
+        const userResourcesRef = database.ref(`resources/${currentUser.uid}`);
+        if (editingResourceId) {
+            await userResourcesRef.child(editingResourceId).update(resourceData);
+        } else {
+            await userResourcesRef.push(resourceData);
+        }
+        resourceFormModal.classList.remove('show');
+        loadResources();
+    } catch (error) {
+        showError('Failed to save resource');
+    }
+});
+
+        // Load resources for current user
+        async function loadResources() {
+            if (!currentUser) return;
+            const userResourcesRef = database.ref(`resources/${currentUser.uid}`);
+            const snapshot = await userResourcesRef.once('value');
+            const resources = snapshot.val() || {};
+            resourcesList.innerHTML = '';
+
+            // Separate pinned and unpinned resources
+            const pinned = [];
+            const unpinned = [];
+            Object.entries(resources).forEach(([id, resource]) => {
+                if (resource.pinned) {
+                    pinned.push([id, resource]);
+                } else {
+                    unpinned.push([id, resource]);
+                }
+            });
+
+            // Show pinned first, then unpinned (both newest first)
+            [...pinned.reverse(), ...unpinned.reverse()].forEach(([id, resource]) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg shadow p-4 flex flex-col gap-2';
+
+                div.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <h4 class="font-bold text-lg text-gray-800">${escapeHtml(resource.title)}</h4>
+                </div>
+                <div class="flex gap-2">
+                    <button class="pin-resource-btn p-2 rounded hover:bg-gray-100" title="${resource.pinned ? 'Unpin' : 'Pin'}">
+                        <i class="fas fa-thumbtack ${resource.pinned ? 'text-green-500' : 'text-gray-400'}"></i>
+                    </button>
+                    <button class="edit-resource-btn p-2 rounded hover:bg-gray-100" title="Edit"><i class="fas fa-edit text-yellow-500"></i></button>
+                    <button class="delete-resource-btn p-2 rounded hover:bg-gray-100" title="Delete"><i class="fas fa-trash text-red-500"></i></button>
+                    <button class="share-resource-btn p-2 rounded hover:bg-gray-100" title="Share"><i class="fas fa-share-alt text-blue-500"></i></button>
+                </div>
+            </div>
+            <div class="text-gray-600">${escapeHtml(resource.description || '')}</div>
+            <div class="flex flex-col gap-1 mb-2">
+    ${(resource.links || []).map(link => `
+        <a href="${escapeHtml(link.url)}" target="_blank" class="px-6 text-center py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors break-all">${escapeHtml(link.title)}</a>
+    `).join('')}
+</div>
+        `;
+
+                // Pin/Unpin
+                div.querySelector('.pin-resource-btn').addEventListener('click', async () => {
+                    await database.ref(`resources/${currentUser.uid}/${id}`).update({ pinned: !resource.pinned });
+                    loadResources();
+                });
+
+                // Edit
+                div.querySelector('.edit-resource-btn').addEventListener('click', () => {
+                    resourceFormTitle.textContent = 'Edit Resource';
+                    document.getElementById('resourceTitle').value = resource.title;
+                    document.getElementById('resourceDescription').value = resource.description || '';
+                    resourceLinksContainer.innerHTML = '';
+                    (resource.links || []).forEach(link => addLinkInput(link));
+                    editingResourceId = id;
+                    resourceFormModal.classList.add('show');
+                });
+
+                // Delete
+                div.querySelector('.delete-resource-btn').addEventListener('click', async () => {
+                    if (confirm('Delete this resource?')) {
+                        await database.ref(`resources/${currentUser.uid}/${id}`).remove();
+                        loadResources();
+                    }
+                });
+
+                // Share
+                div.querySelector('.share-resource-btn').addEventListener('click', () => {
+                    const shareText = `${resource.title}\n${(resource.links || []).join('\n')}\n${resource.description || ''}`;
+                    if (navigator.share) {
+                        navigator.share({ title: resource.title, text: shareText });
+                    } else {
+                        navigator.clipboard.writeText(shareText);
+                        showSuccess('Resource copied to clipboard!');
+                    }
+                });
+
+                resourcesList.appendChild(div);
+            });
+        }
+
+        // Load resources when switching to Resources tab
+        document.getElementById('navResources').addEventListener('click', loadResources);
+
+        // Also reload after login
+        auth.onAuthStateChanged((user) => {
+            if (user) loadResources();
+        });
+
+        // Note management for Note tab
+        const notesList = document.createElement('div');
+        notesList.id = 'notesList';
+        notesList.className = 'space-y-4 w-full max-w-2xl mx-auto';
+
+        const noteFormModal = document.createElement('div');
+        noteFormModal.id = 'noteFormModal';
+        noteFormModal.className = 'modal';
+
+        noteFormModal.innerHTML = `
+    <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold" id="noteFormTitle">Add Note</h3>
+            <button class="close-modal p-2 hover:bg-gray-100 rounded-lg" id="closeNoteForm">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="noteForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Heading</label>
+                <input type="text" id="noteHeading" class="w-full px-4 py-2 border border-gray-300 rounded-lg" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Note</label>
+                <textarea id="noteContent" class="w-full px-4 py-2 border border-gray-300 rounded-lg" rows="3" required></textarea>
+            </div>
+            <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">Save</button>
+        </form>
+    </div>
+`;
+
+        let editingNoteId = null;
+
+        // Insert notes UI into tabNote
+        document.getElementById('tabNote').innerHTML = `
+    <div class="flex flex-col h-screen items-center bg-gray-100 p-8">
+        <button id="addNoteBtn" class="mb-6 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+            <i class="fas fa-plus mr-2"></i>Add Note
+        </button>
+        <div class="h-50vh overflow-y-auto w-full max-w-2xl py-4">
+            <h2 class="text-2xl font-bold mb-4">Notes</h2>
+        </div>
+    </div>
+`;
+        document.getElementById('tabNote').querySelector('.h-50vh').appendChild(notesList);
+        document.body.appendChild(noteFormModal);
+
+        // Show modal to add note
+        document.getElementById('addNoteBtn').addEventListener('click', () => {
+            document.getElementById('noteFormTitle').textContent = 'Add Note';
+            document.getElementById('noteForm').reset();
+            editingNoteId = null;
+            noteFormModal.classList.add('show');
+        });
+
+        // Close modal
+        document.getElementById('closeNoteForm').addEventListener('click', () => {
+            noteFormModal.classList.remove('show');
+        });
+
+        // Save note (add or edit)
+        document.getElementById('noteForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const heading = document.getElementById('noteHeading').value.trim();
+            const content = document.getElementById('noteContent').value.trim();
+
+            if (!heading || !content) return;
+
+            const noteData = {
+                heading,
+                content,
+                createdAt: Date.now()
+            };
+
+            try {
+                const userNotesRef = database.ref(`notes/${currentUser.uid}`);
+                if (editingNoteId) {
+                    await userNotesRef.child(editingNoteId).update(noteData);
+                } else {
+                    await userNotesRef.push(noteData);
+                }
+                noteFormModal.classList.remove('show');
+                loadNotes();
+            } catch (error) {
+                showError('Failed to save note');
+            }
+        });
+
+        async function loadNotes() {
+            if (!currentUser) return;
+            const userNotesRef = database.ref(`notes/${currentUser.uid}`);
+            const snapshot = await userNotesRef.once('value');
+            const notes = snapshot.val() || {};
+            notesList.innerHTML = '';
+
+            // Separate pinned and unpinned notes
+            const pinned = [];
+            const unpinned = [];
+            Object.entries(notes).forEach(([id, note]) => {
+                if (note.pinned) {
+                    pinned.push([id, note]);
+                } else {
+                    unpinned.push([id, note]);
+                }
+            });
+
+            // Show pinned first, then unpinned (both newest first)
+            [...pinned.reverse(), ...unpinned.reverse()].forEach(([id, note]) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg shadow p-4 flex flex-col gap-2';
+
+                div.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <h4 class="font-bold text-lg text-gray-800">${escapeHtml(note.heading)}</h4>
+                </div>
+                <div class="flex gap-2">
+                    <button class="pin-note-btn p-2 rounded hover:bg-gray-100" title="${note.pinned ? 'Unpin' : 'Pin'}">
+                        <i class="fas fa-thumbtack ${note.pinned ? 'text-green-500' : 'text-gray-400'}"></i>
+                    </button>
+                    <button class="edit-note-btn p-2 rounded hover:bg-gray-100" title="Edit"><i class="fas fa-edit text-yellow-500"></i></button>
+                    <button class="delete-note-btn p-2 rounded hover:bg-gray-100" title="Delete"><i class="fas fa-trash text-red-500"></i></button>
+                    <button class="share-note-btn p-2 rounded hover:bg-gray-100" title="Share"><i class="fas fa-share-alt text-blue-500"></i></button>
+                </div>
+            </div>
+            <div class="text-gray-600 editable-note" contenteditable="false">${escapeHtml(note.content)}</div>
+        `;
+
+                // Pin/Unpin
+                div.querySelector('.pin-note-btn').addEventListener('click', async () => {
+                    await database.ref(`notes/${currentUser.uid}/${id}`).update({ pinned: !note.pinned });
+                    loadNotes();
+                });
+
+                // Edit
+                div.querySelector('.edit-note-btn').addEventListener('click', () => {
+                    document.getElementById('noteFormTitle').textContent = 'Edit Note';
+                    document.getElementById('noteHeading').value = note.heading;
+                    document.getElementById('noteContent').value = note.content;
+                    editingNoteId = id;
+                    noteFormModal.classList.add('show');
+                });
+
+                // Delete
+                div.querySelector('.delete-note-btn').addEventListener('click', async () => {
+                    if (confirm('Delete this note?')) {
+                        await database.ref(`notes/${currentUser.uid}/${id}`).remove();
+                        loadNotes();
+                    }
+                });
+
+                // Share
+                div.querySelector('.share-note-btn').addEventListener('click', () => {
+                    const shareText = `${note.heading}\n${note.content}`;
+                    if (navigator.share) {
+                        navigator.share({ title: note.heading, text: shareText });
+                    } else {
+                        navigator.clipboard.writeText(shareText);
+                        showSuccess('Note copied to clipboard!');
+                    }
+                });
+
+                // Make note editable on double click
+                div.querySelector('.editable-note').addEventListener('dblclick', function () {
+                    this.contentEditable = true;
+                    this.focus();
+                });
+                div.querySelector('.editable-note').addEventListener('blur', async function () {
+                    this.contentEditable = false;
+                    const newContent = this.textContent.trim();
+                    if (newContent !== note.content) {
+                        await database.ref(`notes/${currentUser.uid}/${id}`).update({ content: newContent });
+                        showSuccess('Note updated!');
+                        loadNotes();
+                    }
+                });
+
+                notesList.appendChild(div);
+            });
+        }
+
+
+        // Load notes when switching to Note tab
+        document.getElementById('navNote').addEventListener('click', loadNotes);
+
+        // Also reload after login
+        auth.onAuthStateChanged((user) => {
+            if (user) loadNotes();
+        });
+
+
+
+
+        // ...existing code...
+        const goalsList = document.getElementById('goalsList');
+        const goalFormModal = document.getElementById('goalFormModal');
+        const goalForm = document.getElementById('goalForm');
+        const addGoalBtn = document.getElementById('addGoalBtn');
+        const closeGoalForm = document.getElementById('closeGoalForm');
+        const goalFormTitle = document.getElementById('goalFormTitle');
+        let editingGoalId = null;
+
+        // Show modal to add goal
+        addGoalBtn.addEventListener('click', () => {
+            goalFormTitle.textContent = 'Add Goal';
+            goalForm.reset();
+            editingGoalId = null;
+            goalFormModal.classList.add('show');
+        });
+
+        // Close modal
+        closeGoalForm.addEventListener('click', () => {
+            goalFormModal.classList.remove('show');
+        });
+
+        // Save goal (add or edit)
+        goalForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const text = document.getElementById('goalText').value.trim();
+            const date = document.getElementById('goalDate').value;
+
+            if (!text || !date) return;
+
+            const goalData = {
+                text,
+                date,
+                completed: false,
+                createdAt: Date.now()
+            };
+
+            try {
+                const userGoalsRef = database.ref(`goals/${currentUser.uid}`);
+                if (editingGoalId) {
+                    await userGoalsRef.child(editingGoalId).update(goalData);
+                } else {
+                    await userGoalsRef.push(goalData);
+                }
+                goalFormModal.classList.remove('show');
+                loadGoals();
+            } catch (error) {
+                showError('Failed to save goal');
+            }
+        });
+
+        // Load goals for current user
+        async function loadGoals() {
+            if (!currentUser) return;
+            const userGoalsRef = database.ref(`goals/${currentUser.uid}`);
+            const snapshot = await userGoalsRef.once('value');
+            const goals = snapshot.val() || {};
+            goalsList.innerHTML = '';
+
+            Object.entries(goals).reverse().forEach(([id, goal]) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-lg shadow p-4 flex items-center gap-4';
+
+                div.innerHTML = `
+            <input type="checkbox" class="goal-checkbox" ${goal.completed ? 'checked' : ''} style="width: 1.5em; height: 1.5em;">
+            <div class="flex-1">
+                <div class="font-bold text-lg text-gray-800 ${goal.completed ? 'line-through text-green-500' : ''}">${escapeHtml(goal.text)}</div>
+                <div class="text-sm text-gray-500">Target: ${goal.date}</div>
+            </div>
+            <button class="edit-goal-btn p-2 rounded hover:bg-gray-100" title="Edit"><i class="fas fa-edit text-yellow-500"></i></button>
+            <button class="delete-goal-btn p-2 rounded hover:bg-gray-100" title="Delete"><i class="fas fa-trash text-red-500"></i></button>
+        `;
+
+                // Checkbox: mark as completed
+                div.querySelector('.goal-checkbox').addEventListener('change', async function () {
+                    await database.ref(`goals/${currentUser.uid}/${id}`).update({ completed: this.checked });
+                    if (this.checked) {
+                        showSuccess('🎉 Congratulations on completing your goal!');
+                    }
+                    loadGoals();
+                });
+
+                // Edit
+                div.querySelector('.edit-goal-btn').addEventListener('click', () => {
+                    goalFormTitle.textContent = 'Edit Goal';
+                    document.getElementById('goalText').value = goal.text;
+                    document.getElementById('goalDate').value = goal.date;
+                    editingGoalId = id;
+                    goalFormModal.classList.add('show');
+                });
+
+                // Delete
+                div.querySelector('.delete-goal-btn').addEventListener('click', async () => {
+                    if (confirm('Delete this goal?')) {
+                        await database.ref(`goals/${currentUser.uid}/${id}`).remove();
+                        showError('😢 Goal deleted!');
+                        loadGoals();
+                    }
+                });
+
+                goalsList.appendChild(div);
+            });
+        }
+
+        // Load goals when switching to Goals tab
+        document.getElementById('navGoals').addEventListener('click', loadGoals);
+
+        // Also reload after login
+        auth.onAuthStateChanged((user) => {
+            if (user) loadGoals();
+        });
+
+        // Load notifications
+        async function loadNotifications() {
+    if (!currentUser) return;
+    const notificationsList = document.getElementById('notificationsList');
+    notificationsList.innerHTML = '<div class="text-gray-500">Loading...</div>';
+
+    const chatsRef = database.ref('chats');
+    const snapshot = await chatsRef.once('value');
+    const chats = snapshot.val() || {};
+    const notifications = [];
+
+    for (const [chatId, chat] of Object.entries(chats)) {
+        if (chat.members && chat.members[currentUser.uid]) {
+            // Get last message
+            const messagesRef = database.ref(`messages/${chatId}`);
+            const messagesSnap = await messagesRef.limitToLast(1).once('value');
+            const messages = messagesSnap.val();
+            if (messages) {
+                const [lastMsgId, lastMsg] = Object.entries(messages)[0];
+                // Example: notify if last message is not from current user
+                if (lastMsg.senderId !== currentUser.uid) {
+                    notifications.push({
+                        chatName: chat.type === 'group' ? chat.name : getPrivateChatName(chat),
+                        text: lastMsg.text || '[Media]',
+                        time: formatTime(lastMsg.timestamp),
+                        chatId
+                    });
+                }
+            }
+        }
+    }
+
+    notificationsList.innerHTML = '';
+    if (notifications.length === 0) {
+        notificationsList.innerHTML = '<div class="text-gray-500">No new notifications.</div>';
+    } else {
+        notifications.reverse().forEach(n => {
+            const div = document.createElement('div');
+            div.className = 'bg-white rounded-lg shadow p-4 flex flex-col gap-1 cursor-pointer hover:bg-blue-50';
+            div.innerHTML = `
+                <div class="font-bold text-gray-800">${escapeHtml(n.chatName)}</div>
+                <div class="text-gray-600">${escapeHtml(n.text)}</div>
+                <div class="text-xs text-gray-400">${n.time}</div>
+            `;
+            div.onclick = () => {
+                // Open chat on click
+                database.ref('chats/' + n.chatId).once('value').then(snap => {
+                    openChat(n.chatId, snap.val());
+                    showTab('tabChats');
+                    document.getElementById('mainApp').style.display = 'flex';
+                });
+            };
+            notificationsList.appendChild(div);
+        });
+    }
+}
+
+        // Load notifications when switching to Notifications tab
+        document.getElementById('navNotifications').addEventListener('click', loadNotifications);
+
+        // Also reload after login
+        auth.onAuthStateChanged((user) => {
+            if (user) loadNotifications();
+        });
+
+        // Initial setup
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                showMainApp();
+            } else {
+                elements.loadingScreen.style.display = 'none';
+                elements.authScreen.style.display = 'flex';
+            }
+        });
+    </script>
+
+</body>
+
+</html>
