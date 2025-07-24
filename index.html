@@ -1829,13 +1829,11 @@
     const div = document.createElement('div');
     div.className = 'flex flex-col gap-2 mb-2 text-black';
     div.innerHTML = `
-    <div>
-        <input type="text" class="resource-link-title px-2 py-1 border rounded" placeholder="Link Title" value="${link.title ? escapeHtml(link.title) : ''}" required>
-        </div>
-        <div>
+    
+        <input type="text" class="resource-link-title px-2 py-1 border rounded" placeholder="Link Title" value="${link.title ? escapeHtml(link.title) : ''}" required>    
         <input type="url" class="resource-link-url flex-1 px-2 py-1 border rounded" placeholder="https://..." value="${link.url ? escapeHtml(link.url) : ''}" required>
-        <button type="button" class="remove-link-btn text-red-500 px-2">✕</button>
-        </div>
+        <button type="button" class="remove-link-btn text-red-500 px-2">Remove</button>
+        
     `;
     div.querySelector('.remove-link-btn').onclick = () => div.remove();
     resourceLinksContainer.appendChild(div);
